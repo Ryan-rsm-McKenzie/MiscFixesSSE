@@ -74,6 +74,11 @@ namespace Hooks
 	{
 		RelocAddr<uintptr_t> BadUse(0x133C590 + 0x1AFD);
 		UInt8 patch[] = { 0x4D, 0x8B, 0xCF, 0x90, 0x90, 0x90, 0x90 };
+		// mov r9, 15
+		// nop
+		// nop
+		// nop
+		// nop
 		for (UInt32 i = 0; i < sizeof(patch); ++i) {
 			SafeWrite8(BadUse.GetUIntPtr() + i, patch[i]);
 		}
