@@ -70,9 +70,21 @@ namespace Hooks
 	TESObjectBookEx::_LoadBuffer_t* TESObjectBookEx::orig_LoadBuffer;
 
 
+	void PatchUseAfterFree()
+	{
+		RelocAddr<uintptr_t> BadUse(0x133C590 + 0x1AFD);
+		UInt8 patch[] = { 0x4D, 0x8B, 0xCF, 0x90, 0x90, 0x90, 0x90 };
+		for (UInt32 i = 0; i < sizeof(patch); ++i) {
+			SafeWrite8(BadUse.GetUIntPtr() + i, patch[i]);
+		}
+		_DMESSAGE("[DEBUG] Installed patch for use after free");
+	}
+
+
 	void InstallHooks()
 	{
 		ActorEx::InstallHooks();
 		TESObjectBookEx::InstallHooks();
+		PatchUseAfterFree();
 	}
 }
