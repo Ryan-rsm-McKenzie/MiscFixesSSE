@@ -3,11 +3,14 @@
 #include "skse64_common/BranchTrampoline.h"  // g_branchTrampoline
 #include "skse64_common/Relocation.h"  // RelocPtr
 #include "skse64_common/SafeWrite.h"  // SafeWrite64
+#include "xbyak/xbyak.h"  // CodeGenerator
 
 #include <typeinfo>  // typeid
 
 #include "RE/Actor.h"  // Actor
 #include "RE/TESObjectBOOK.h"  // TESObjectBOOK
+
+#include "Util.h"
 
 
 namespace Hooks
@@ -43,17 +46,16 @@ namespace Hooks
 		void Hook_LoadBuffer(RE::BGSLoadFormBuffer* a_buf)
 		{
 			using Flag = Data::Flag;
-
-			constexpr UInt32 INVALID = 0xFFFFFFFF;
+			using Skill = Data::Skill;
 
 			orig_LoadBuffer(this, a_buf);
 
-			if (data.teaches.skill == INVALID) {
+			if (data.teaches.skill == Skill::kNone) {
 				if (TeachesSkill()) {
-					data.flags = Flag(data.flags & ~Flag::kFlag_Skill);
+					data.flags &= ~Flag::kTeachesSkill;
 				}
 				if (TeachesSpell()) {
-					data.flags = Flag(data.flags & ~Flag::kFlag_Spell);
+					data.flags &= ~Flag::kTeachesSpell;
 				}
 			}
 		}
@@ -80,15 +82,27 @@ namespace Hooks
 		constexpr uintptr_t BadUseFuncBase = 0x0133C590;	// 1_5_62
 
 		RelocAddr<uintptr_t> BadUse(BadUseFuncBase + 0x1AFD);
-		UInt8 patch[] = { 0x4D, 0x8B, 0xCF, 0x90, 0x90, 0x90, 0x90 };
-		// mov r9, 15
-		// nop
-		// nop
-		// nop
-		// nop
-		for (UInt32 i = 0; i < sizeof(patch); ++i) {
-			SafeWrite8(BadUse.GetUIntPtr() + i, patch[i]);
+
+		struct Patch : Xbyak::CodeGenerator
+		{
+			Patch(void* buf) : Xbyak::CodeGenerator(1024, buf)
+			{
+				mov(r9, r15);
+				nop();
+				nop();
+				nop();
+				nop();
+			}
+		};
+
+		void* patchBuf = g_localTrampoline.StartAlloc();
+		Patch patch(patchBuf);
+		g_localTrampoline.EndAlloc(patch.getCurr());
+
+		for (UInt32 i = 0; i < patch.getSize(); ++i) {
+			SafeWrite8(BadUse.GetUIntPtr() + i, *(patch.getCode() + i));
 		}
+
 		_DMESSAGE("[DEBUG] Installed patch for use after free");
 	}
 

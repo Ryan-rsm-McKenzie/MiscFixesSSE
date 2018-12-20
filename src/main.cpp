@@ -1,15 +1,11 @@
-﻿#include "skse64/GameEvents.h"  // EventDispatcherList
-#include "skse64/GameInput.h"  // InputEventDispatcher
-#include "skse64/GameMenus.h"  // MenuManager
-#include "skse64/PluginAPI.h"  // PluginHandle, SKSEMessagingInterface, SKSETaskInterface, SKSEInterface, PluginInfo
+﻿#include "skse64/PluginAPI.h"  // PluginHandle, SKSEMessagingInterface, SKSEInterface, PluginInfo
 #include "skse64_common/BranchTrampoline.h"  // g_branchTrampoline
 #include "skse64_common/skse_version.h"  // RUNTIME_VERSION
 
 #include <ShlObj.h>  // CSIDL_MYDOCUMENTS
 
 #include "Hooks.h"  // InstallHooks()
-#include "version.h"
-
+#include "version.h"  // MISCFIXESSSE_VERSION_VERSTRING
 
 
 static PluginHandle	g_pluginHandle = kPluginHandle_Invalid;
@@ -56,6 +52,13 @@ extern "C" {
 			_MESSAGE("[MESSAGE] Branch trampoline creation successful");
 		} else {
 			_FATALERROR("[FATAL ERROR] Branch trampoline creation failed!\n");
+			return false;
+		}
+
+		if (g_localTrampoline.Create(1024 * 8)) {
+			_MESSAGE("[MESSAGE] Local trampoline creation successful");
+		} else {
+			_FATALERROR("[FATAL ERROR] Local trampoline creation failed!\n");
 			return false;
 		}
 

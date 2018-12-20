@@ -1,5 +1,11 @@
 # MiscFixesSSE
 
+## Build Dependencies
+* [SKSE64](https://skse.silverlock.org/)
+* [CommonLibSSE](https://github.com/SniffleMan/CommonLibSSE)
+
+## End User Dependencies
+* [SKSE64](https://skse.silverlock.org/)
 
 ## Bugs Fixed
 * When using the `IsRunning` function available to perk fragments on anything that isn't an actor, the game will crash.
