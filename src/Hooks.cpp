@@ -1,16 +1,23 @@
-#include "Hooks.h"
+﻿#include "Hooks.h"
+
+#undef min
+#undef max
 
 #include "skse64_common/BranchTrampoline.h"  // g_branchTrampoline
 #include "skse64_common/Relocation.h"  // RelocPtr
 #include "skse64_common/SafeWrite.h"  // SafeWrite64
 #include "xbyak/xbyak.h"  // CodeGenerator
 
+#include <wchar.h>  // wcsrtombs_s
+#include <climits>  // numeric_limits
+#include <string>  // string, wstring
+#include <fstream>  // ofstream
 #include <typeinfo>  // typeid
+
+#include <stringapiset.h>  // WideCharToMultiByte
 
 #include "RE/Actor.h"  // Actor
 #include "RE/TESObjectBOOK.h"  // TESObjectBOOK
-
-#include "Util.h"
 
 
 namespace Hooks
@@ -46,11 +53,10 @@ namespace Hooks
 		void Hook_LoadBuffer(RE::BGSLoadFormBuffer* a_buf)
 		{
 			using Flag = Data::Flag;
-			using Skill = Data::Skill;
 
 			orig_LoadBuffer(this, a_buf);
 
-			if (data.teaches.skill == Skill::kNone) {
+			if (data.teaches.skill == RE::ActorValue::kNone) {
 				if (TeachesSkill()) {
 					data.flags &= ~Flag::kTeachesSkill;
 				}
@@ -99,6 +105,8 @@ namespace Hooks
 		Patch patch(patchBuf);
 		g_localTrampoline.EndAlloc(patch.getCurr());
 
+		ASSERT(patch.getSize() == 7);
+
 		for (UInt32 i = 0; i < patch.getSize(); ++i) {
 			SafeWrite8(BadUse.GetUIntPtr() + i, *(patch.getCode() + i));
 		}
@@ -107,10 +115,59 @@ namespace Hooks
 	}
 
 
+	struct UnkData
+	{
+		void*		unk00;	// 00
+		void*		unk08;	// 08
+		void*		unk10;	// 10
+		std::size_t	size;	// 18
+		char		buf[1];	// 20 - buf[size]?
+	};
+
+
+	errno_t Hook_wcsrtombs_s(std::size_t* a_retval, char* a_dst, rsize_t a_dstsz, const wchar_t** a_src, rsize_t a_len, std::mbstate_t* a_ps)
+	{
+		int numChars = WideCharToMultiByte(CP_UTF8, 0, *a_src, a_len, NULL, 0, NULL, NULL);
+		bool err;
+		std::string str;
+		if (numChars != 0 && numChars <= str.max_size()) {
+			str.resize(numChars);
+			err = WideCharToMultiByte(CP_UTF8, 0, *a_src, a_len, str.data(), numChars, NULL, NULL) ? false : true;
+		} else {
+			err = true;
+		}
+
+		if (err) {
+			if (a_retval) {
+				*a_retval = static_cast<std::size_t>(-1);
+			}
+			if (a_dst && a_dstsz != 0 && a_dstsz <= std::numeric_limits<rsize_t>::max()) {
+				a_dst[0] = '\0';
+			}
+			return GetLastError();
+		}
+
+		if (a_retval) {
+			*a_retval = static_cast<std::size_t>(numChars);
+		}
+		return 0;
+	}
+
+
+	void InstallBNetCrashFix()
+	{
+		constexpr std::uintptr_t TARGET_FUNC = 0x011551A0;
+		RelocAddr<std::uintptr_t> targetCall(TARGET_FUNC + 0x2A);
+		g_branchTrampoline.Write6Call(targetCall.GetUIntPtr(), GetFnAddr(&Hook_wcsrtombs_s));
+	}
+
+
 	void InstallHooks()
 	{
 		ActorEx::InstallHooks();
 		TESObjectBookEx::InstallHooks();
 		PatchUseAfterFree();
+
+		InstallBNetCrashFix();
 	}
 }

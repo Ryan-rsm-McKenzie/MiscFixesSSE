@@ -2,6 +2,8 @@
 #include "skse64_common/BranchTrampoline.h"  // g_branchTrampoline
 #include "skse64_common/skse_version.h"  // RUNTIME_VERSION
 
+#include <clocale>  // setlocale
+
 #include <ShlObj.h>  // CSIDL_MYDOCUMENTS
 
 #include "Hooks.h"  // InstallHooks()
@@ -26,6 +28,8 @@ void MessageHandler(SKSEMessagingInterface::Message* a_msg)
 extern "C" {
 	bool SKSEPlugin_Query(const SKSEInterface* a_skse, PluginInfo* a_info)
 	{
+		std::setlocale(LC_ALL, "");
+
 		gLog.OpenRelative(CSIDL_MYDOCUMENTS, "\\My Games\\Skyrim Special Edition\\SKSE\\MiscFixesSSE.log");
 		gLog.SetPrintLevel(IDebugLog::kLevel_DebugMessage);
 		gLog.SetLogLevel(IDebugLog::kLevel_DebugMessage);
