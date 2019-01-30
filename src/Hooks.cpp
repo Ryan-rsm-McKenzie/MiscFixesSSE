@@ -17,7 +17,13 @@
 #include <stringapiset.h>  // WideCharToMultiByte
 
 #include "RE/Actor.h"  // Actor
+#include "RE/FormTypes.h"  // FormType
+#include "RE/ScriptEventSourceHolder.h"  // ScriptEventSourceHolder
+#include "RE/TESForm.h"  // TESForm
 #include "RE/TESObjectBOOK.h"  // TESObjectBOOK
+#include "RE/TESShout.h"  // TESShout
+
+#include "RE/PlayerCharacter.h"  // TODO
 
 
 namespace Hooks
@@ -128,11 +134,22 @@ namespace Hooks
 	errno_t Hook_wcsrtombs_s(std::size_t* a_retval, char* a_dst, rsize_t a_dstsz, const wchar_t** a_src, rsize_t a_len, std::mbstate_t* a_ps)
 	{
 		int numChars = WideCharToMultiByte(CP_UTF8, 0, *a_src, a_len, NULL, 0, NULL, NULL);
-		bool err;
+
 		std::string str;
-		if (numChars != 0 && numChars <= str.max_size()) {
+		char* dst = 0;
+		rsize_t dstsz = 0;
+		if (a_dst) {
+			dst = a_dst;
+			dstsz = a_dstsz;
+		} else {
 			str.resize(numChars);
-			err = WideCharToMultiByte(CP_UTF8, 0, *a_src, a_len, str.data(), numChars, NULL, NULL) ? false : true;
+			dst = str.data();
+			dstsz = str.max_size();
+		}
+
+		bool err;
+		if (a_src && numChars != 0 && numChars <= dstsz) {
+			err = WideCharToMultiByte(CP_UTF8, 0, *a_src, a_len, dst, numChars, NULL, NULL) ? false : true;
 		} else {
 			err = true;
 		}
@@ -156,9 +173,60 @@ namespace Hooks
 
 	void InstallBNetCrashFix()
 	{
-		constexpr std::uintptr_t TARGET_FUNC = 0x011551A0;
+		constexpr std::uintptr_t TARGET_FUNC = 0x011551A0;	// 1_5_62
 		RelocAddr<std::uintptr_t> targetCall(TARGET_FUNC + 0x2A);
 		g_branchTrampoline.Write6Call(targetCall.GetUIntPtr(), GetFnAddr(&Hook_wcsrtombs_s));
+	}
+
+
+	void InstallEquipEventSpamFix()
+	{
+		constexpr std::uintptr_t TARGET_FUNC = 0x006325B0;
+
+		RelocAddr<std::uintptr_t> funcBase(TARGET_FUNC);
+
+		struct Patch : Xbyak::CodeGenerator
+		{
+			Patch(void* a_buf, UInt64 a_funcBase) : Xbyak::CodeGenerator(1024, a_buf)
+			{
+				Xbyak::Label ifSame;
+				Xbyak::Label ifSameOut;
+				Xbyak::Label ifDiff;
+				Xbyak::Label ifDiffOut;
+
+				test(ptr[r14 + 0x1E0], rdi);
+				jz(ifDiff);
+				jmp(ifSame);
+
+
+				L(ifSame);
+				jmp(ptr[rip + ifSameOut]);
+
+				L(ifSameOut);
+				dq(a_funcBase + 0x236);
+
+				L(ifDiff);
+				mov(ptr[r14 + 0x1E0], rdi);
+				jmp(ptr[rip + ifDiffOut]);
+
+				L(ifDiffOut);
+				dq(a_funcBase + 0x18A);
+			}
+		};
+
+		void* patchBuf = g_localTrampoline.StartAlloc();
+		Patch patch(patchBuf, funcBase.GetUIntPtr());
+		g_localTrampoline.EndAlloc(patch.getCurr());
+
+		g_branchTrampoline.Write5Branch(funcBase.GetUIntPtr() + 0x17A, reinterpret_cast<std::uintptr_t>(patch.getCode()));
+
+		constexpr UInt32 DIFF = 16 - 5;
+		constexpr UInt8 NOP = 0x90;
+		for (UInt32 i = 0; i < DIFF; ++i) {
+			SafeWrite8(funcBase.GetUIntPtr() + 0x17A + 5 + i, NOP);
+		}
+
+		_DMESSAGE("[DEBUG] Installed patch for equip event spam (size == %zu)", patch.getSize());
 	}
 
 
@@ -167,7 +235,8 @@ namespace Hooks
 		ActorEx::InstallHooks();
 		TESObjectBookEx::InstallHooks();
 		PatchUseAfterFree();
-
 		InstallBNetCrashFix();
+
+		InstallEquipEventSpamFix();
 	}
 }

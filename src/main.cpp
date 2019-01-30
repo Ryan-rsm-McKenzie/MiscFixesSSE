@@ -6,8 +6,11 @@
 
 #include <ShlObj.h>  // CSIDL_MYDOCUMENTS
 
+#include "Events.h"  // TESEquipEventHandler
 #include "Hooks.h"  // InstallHooks()
 #include "version.h"  // MISCFIXESSSE_VERSION_VERSTRING
+
+#include "RE/ScriptEventSourceHolder.h"  // ScriptEventSourceHolder
 
 
 static PluginHandle	g_pluginHandle = kPluginHandle_Invalid;
@@ -17,9 +20,13 @@ static SKSEMessagingInterface* g_messaging = 0;
 void MessageHandler(SKSEMessagingInterface::Message* a_msg)
 {
 	switch (a_msg->type) {
-	case SKSEMessagingInterface::kMessage_PostPostLoad:
-		break;
-	case SKSEMessagingInterface::kMessage_InputLoaded:
+	case SKSEMessagingInterface::kMessage_DataLoaded:
+		{
+			RE::ScriptEventSourceHolder* sourceHolder = RE::ScriptEventSourceHolder::GetSingleton();
+			TESEquipEventHandler* equipHandler = TESEquipEventHandler::GetSingleton();
+			sourceHolder->equipEventSource.AddEventSink(equipHandler);
+			_MESSAGE("[MESSAGE] Sinked equip event handler");
+		}
 		break;
 	}
 }

@@ -18,12 +18,18 @@
     <ClCompile Include="src\Hooks.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\Events.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\Hooks.h">
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\version.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Events.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
