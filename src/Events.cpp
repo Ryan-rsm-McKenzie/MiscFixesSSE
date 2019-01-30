@@ -1,7 +1,5 @@
 #include "Events.h"
 
-#include <cstring>  // memset
-
 #include "RE/BSTEvent.h"  // EventResult, BSTEventSource
 #include "RE/TESEquipEvent.h"  // TESEquipEvent
 

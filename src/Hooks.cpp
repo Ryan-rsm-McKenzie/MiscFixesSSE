@@ -17,13 +17,7 @@
 #include <stringapiset.h>  // WideCharToMultiByte
 
 #include "RE/Actor.h"  // Actor
-#include "RE/FormTypes.h"  // FormType
-#include "RE/ScriptEventSourceHolder.h"  // ScriptEventSourceHolder
-#include "RE/TESForm.h"  // TESForm
 #include "RE/TESObjectBOOK.h"  // TESObjectBOOK
-#include "RE/TESShout.h"  // TESShout
-
-#include "RE/PlayerCharacter.h"  // TODO
 
 
 namespace Hooks
@@ -182,6 +176,14 @@ namespace Hooks
 	void InstallEquipEventSpamFix()
 	{
 		constexpr std::uintptr_t TARGET_FUNC = 0x006325B0;
+		constexpr std::uintptr_t BRANCH_OFF = 0x17A;
+		constexpr std::uintptr_t SEND_EVENT_BEGIN = 0x18A;
+		constexpr std::uintptr_t SEND_EVENT_END = 0x236;
+		constexpr std::size_t EQUIPPED_SHOUT = offsetof(RE::Actor, equippedShout);
+		constexpr UInt32 BRANCH_SIZE = 5;
+		constexpr UInt32 CODE_CAVE_SIZE = 16;
+		constexpr UInt32 DIFF = CODE_CAVE_SIZE - BRANCH_SIZE;
+		constexpr UInt8 NOP = 0x90;
 
 		RelocAddr<std::uintptr_t> funcBase(TARGET_FUNC);
 
@@ -189,28 +191,29 @@ namespace Hooks
 		{
 			Patch(void* a_buf, UInt64 a_funcBase) : Xbyak::CodeGenerator(1024, a_buf)
 			{
-				Xbyak::Label ifSame;
-				Xbyak::Label ifSameOut;
-				Xbyak::Label ifDiff;
-				Xbyak::Label ifDiffOut;
+				Xbyak::Label exitLbl;
+				Xbyak::Label exitIP;
+				Xbyak::Label sendEvent;
 
-				test(ptr[r14 + 0x1E0], rdi);
-				jz(ifDiff);
-				jmp(ifSame);
+				// r14 = Actor*
+				// rdi = TESShout*
+
+				cmp(ptr[r14 + EQUIPPED_SHOUT], rdi);	// if (actor->equippedShout != shout)
+				je(exitLbl);
+				mov(ptr[r14 + EQUIPPED_SHOUT], rdi);	// actor->equippedShout = shout;
+				test(rdi, rdi);							// if (shout)
+				jz(exitLbl);
+				jmp(ptr[rip + sendEvent]);
 
 
-				L(ifSame);
-				jmp(ptr[rip + ifSameOut]);
+				L(exitLbl);
+				jmp(ptr[rip + exitIP]);
 
-				L(ifSameOut);
-				dq(a_funcBase + 0x236);
+				L(exitIP);
+				dq(a_funcBase + SEND_EVENT_END);
 
-				L(ifDiff);
-				mov(ptr[r14 + 0x1E0], rdi);
-				jmp(ptr[rip + ifDiffOut]);
-
-				L(ifDiffOut);
-				dq(a_funcBase + 0x18A);
+				L(sendEvent);
+				dq(a_funcBase + SEND_EVENT_BEGIN);
 			}
 		};
 
@@ -218,12 +221,10 @@ namespace Hooks
 		Patch patch(patchBuf, funcBase.GetUIntPtr());
 		g_localTrampoline.EndAlloc(patch.getCurr());
 
-		g_branchTrampoline.Write5Branch(funcBase.GetUIntPtr() + 0x17A, reinterpret_cast<std::uintptr_t>(patch.getCode()));
+		g_branchTrampoline.Write5Branch(funcBase.GetUIntPtr() + BRANCH_OFF, reinterpret_cast<std::uintptr_t>(patch.getCode()));
 
-		constexpr UInt32 DIFF = 16 - 5;
-		constexpr UInt8 NOP = 0x90;
 		for (UInt32 i = 0; i < DIFF; ++i) {
-			SafeWrite8(funcBase.GetUIntPtr() + 0x17A + 5 + i, NOP);
+			SafeWrite8(funcBase.GetUIntPtr() + BRANCH_OFF + BRANCH_SIZE + i, NOP);
 		}
 
 		_DMESSAGE("[DEBUG] Installed patch for equip event spam (size == %zu)", patch.getSize());
